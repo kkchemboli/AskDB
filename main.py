@@ -11,35 +11,22 @@ from langchain_core.tools import tool
 
 def main():
     db = SQLDatabase.from_uri("sqlite:///Chinook.db")
-    llm = ChatOllama(model="mistral", temperature=0)
+    llm = ChatOllama(model="qwen2.5", temperature=0)
 
     system_message = """
 You are an agent designed to interact with a {dialect} database using tools. 
 
 ## Rules for Behavior
-1. You MUST always start by calling the `list_tables` tool to see which tables exist. 
-   - Do not guess table names.
-2. After identifying candidate tables, you MUST call the `tables_schema` tool 
-   to inspect their schema before writing any query.
-3. Before executing a SQL query, you MUST call the `check_sql` tool to validate it.
-4. Only then should you call `execute_sql` to run the query.
-5. If a query fails, rewrite and retry until it executes successfully.
-6. Never return pseudo-code or describe tool usage in natural language — always invoke the actual tools.
-7. Never make DML (INSERT, UPDATE, DELETE, DROP, etc.) statements. You are read-only.
+1. You MUST always start by calling the `list_tables` tool for EVERY user question. 
+   - Even if you think you already know the schema.
+2. You MUST use `tables_schema` to confirm the columns before writing a query.
+3. You MUST call `check_sql` before executing any SQL.
+4. You MUST call `execute_sql` to get the answer.
+5. You MUST NEVER respond with steps, explanations, or pseudo-code. 
+6.Unless the user explicitly specifies otherwise, LIMIT all results to at most {top_k}.
+   - If the user asks a question, you ONLY respond with final results.
+""".format(dialect="SQLite",top_k=5)
 
-## SQL Guidelines
-- You are writing {dialect} queries.
-- Only query the relevant columns, never use `SELECT *`.
-- Unless the user specifies otherwise, limit results to at most {top_k}.
-- You can order results by a relevant column to show the most useful data.
-- Double check your SQL carefully before execution.
-
-## Goal
-Given a user’s question, use the tools step by step to find the correct answer from the database.
-""".format(
-    dialect="SQLite",
-    top_k=5
-)
 
     @tool("list_tables")
     def list_tables() -> str:
@@ -73,10 +60,13 @@ Given a user’s question, use the tools step by step to find the correct answer
     tools = [list_tables, tables_schema, check_sql, execute_sql]
     agent =  create_react_agent(model=llm,tools=tools,prompt=system_message)
 
-    question = "List all the tables in the database."
+    question = "Which genre has the highest average track length?"
 
-    for step in agent.stream({"messages": [{"role": "user", "content": question}]},stream_mode="values",):
-     step["messages"][-1].pretty_print()
+    for step in agent.stream(
+    {"messages": [{"role": "user", "content": question}]}, 
+    stream_mode="values"
+):
+        print(step["messages"][-1].pretty_print())
 
 
 
