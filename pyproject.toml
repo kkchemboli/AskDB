@@ -1,7 +1,7 @@
 [project]
 name = "AskDB"
 version = "0.1.0"
-description = "Add your description here"
+description = "AskDB is a Streamlit-powered application that lets you interact with your SQLite databases using natural language queries. It leverages LangChain, LLMs, and Plotly to generate SQL, run queries, and visualize results as interactive charts—all from a simple web interface."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
