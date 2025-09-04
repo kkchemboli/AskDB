@@ -45,7 +45,7 @@ streamlit run frontend.py
 ## Project Structure
 
 ```
-langgraphsql/
+AskDB/
 ├── frontend.py           # Streamlit web app
 ├── main.py               # Core agent logic (async)
 ├── helper_functions.py   # Utility functions for HTML saving, etc.
