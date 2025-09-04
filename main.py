@@ -5,12 +5,25 @@ from langgraph.prebuilt import create_react_agent
 from langchain_core.vectorstores import InMemoryVectorStore
 from langchain.agents.agent_toolkits import create_retriever_tool
 from langchain_core.tools import tool
-import re
+import re,asyncio,os
 from langchain_chroma import Chroma
+from langchain_sandbox import PyodideSandboxTool
 
 # -------------------------
 # Helper functions
 # -------------------------
+def save_if_html(text: str, query: str, graphs_dir: str):
+    """Check if text is HTML and save, else print."""
+    if text.startswith("<!DOCTYPE html>") or text.startswith("<html"):
+        safe_query = re.sub(r"[^a-zA-Z0-9_-]+", "_", query.strip())[:80]
+        filename = os.path.join(graphs_dir, f"{safe_query}.html")
+        with open(filename, "w", encoding="utf-8") as f:
+            f.write(text)
+        print(f"✅ Plotly chart saved to {filename}")
+    else:
+        print(text)
+        
+
 def get_text_columns(db, table):
     """Return all text-like columns in a table."""
     rows = db._execute(f"PRAGMA table_info({table});")
@@ -48,7 +61,7 @@ def collect_unique_values(db, strip_numbers=False):
 # -------------------------
 # Main function
 # -------------------------
-def main():
+async def main():
     # Initialize DB, LLM, and tools
     db = SQLDatabase.from_uri("sqlite:///Chinook.db")
     llm = ChatOllama(model="qwen2.5", temperature=0)
@@ -57,32 +70,30 @@ def main():
     # Initialize vector store
     embeddings = OllamaEmbeddings(model="nomic-embed-text")
     vector_store = Chroma(
-    collection_name="example_collection",
-    embedding_function=embeddings,
-    persist_directory="./chroma_langchain_db",
-)
+        collection_name="example_collection",
+        embedding_function=embeddings,
+        persist_directory="./chroma_langchain_db",
+    )
     if len(vector_store.get()["documents"]) == 0:
         unique_values = collect_unique_values(db, strip_numbers=True)
         vector_store.add_texts(unique_values)
 
-  
     retriever = vector_store.as_retriever(search_kwargs={"k": 5})
     description = (
-    "Use to look up proper nouns. Input can be any approximate spelling, "
-    "output is valid proper nouns from the database. Search is case-insensitive."
-)
+        "Use to look up proper nouns. Input can be any approximate spelling, "
+        "output is valid proper nouns from the database. Search is case-insensitive."
+    )
 
     @tool("search_proper_nouns", description=description)
     def lowercase_query_wrapper(query: str):
-        # Convert user query to lowercase and return relevant documents
         docs = retriever.invoke(query.lower())
-        # Return only the text content as a list of strings
         return [doc.page_content for doc in docs]
 
-    tools.append(lowercase_query_wrapper)
-
-    # System prompt for agent
-    system_message = """
+    sandbox_tool = PyodideSandboxTool(allow_net=True)
+    tools += (lowercase_query_wrapper, sandbox_tool)
+    graphs_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "graphs"))
+    # System prompt
+    system_message = f"""
 You are an agent designed to interact with a SQLite database using tools.
 
 Rules:
@@ -90,8 +101,15 @@ Rules:
 2. Use `tables_schema` to confirm columns before writing a query.
 3. Call `check_sql` before executing SQL.
 4. Call `execute_sql` to get the answer.
-5. Never respond with steps or explanations.
-6. Limit all results to top 5 unless specified.
+5. If the user asks for a chart, plot, or visualization:
+   - Always generate Python code to create a pandas DataFrame from the SQL results.
+   - Select an appropriate Plotly chart type.
+   - Convert it to HTML using fig.to_html().
+   - Return ONLY the raw HTML string that starts with <!DOCTYPE html>. 
+   - Do NOT wrap it in Markdown fences (```) or add explanations, text, or formatting. 
+   - Never include Python code in the final output — only the HTML string.
+6. Never respond with steps or explanations.
+7. Limit all results to top 5 unless specified.
 """
     suffix = (
         "If you need to filter on a proper noun like a Name, you must ALWAYS first look up "
@@ -100,21 +118,36 @@ Rules:
     )
     system = f"{system_message}\n\n{suffix}"
 
-    # Create agent
     agent = create_react_agent(model=llm, tools=tools, prompt=system)
 
-    # Example user query
-    question = "How many albums does alis in chain have?"
+    question = "Plot a pie chart showing the distribution of tracks by genre."
 
-    # Stream agent response
-    for step in agent.stream(
-        {"messages": [{"role": "user", "content": question}]},
-        stream_mode="values"
-    ):
-        print(step["messages"][-1].pretty_print())
+    
+    async for chunk in agent.astream(
+    {"messages": [{"role": "user", "content": question}]},
+    stream_mode="values",
+):
+        msg = chunk["messages"][-1]
+        content = msg.content
+
+        texts = []
+        if isinstance(content, str):
+            texts = [content.strip()]
+        elif isinstance(content, list):
+            texts = [b.get("text", "").strip() for b in content if isinstance(b, dict) and b.get("type") == "text"]
+
+        for text in texts:
+            if text:  # skip empty
+                save_if_html(text, question, graphs_dir)
+
+
+
+
+
 
 # -------------------------
 # Run
 # -------------------------
 if __name__ == "__main__":
-    main()
+    os.makedirs("graphs", exist_ok=True)
+    asyncio.run(main())
