@@ -23,7 +23,7 @@ AskDB is a Streamlit-powered application that lets you interact with your SQLite
 This project uses [uv](https://github.com/astral-sh/uv) as the package manager (a fast Python package installer and resolver).
 
 ```bash
-uv pip install -r requirements.txt
+uv sync
 ```
 
 ### 2. Start the Streamlit app
@@ -52,6 +52,8 @@ AskDB/
 ├── tools.py              # Custom LangChain tools (retriever, sandbox)
 ├── requirements.txt      # Python dependencies
 ├── README.md             # This file
+├── pyproject.toml        # Project metadata and dependencies
+├── uv.lock               # Locked dependency versions
 ```
 
 ---
