@@ -18,6 +18,13 @@ AskDB is a Streamlit-powered application that lets you interact with your SQLite
 
 ## Quickstart
 
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/kkchemboli/querytovis.git
+cd querytovis
+```
+
 ### 1. Install dependencies
 
 This project uses [uv](https://github.com/astral-sh/uv) as the package manager (a fast Python package installer and resolver).
