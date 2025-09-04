@@ -4,7 +4,7 @@ import tempfile
 import streamlit.components.v1 as components
 import asyncio
 
-st.title("LangGraphSQL: Natural Language to SQL & Plotly Charts")
+st.title("AskDB: Natural Language to SQL & Plotly Charts")
 
 # Step 1: Upload SQLite DB
 db_file = st.file_uploader("Upload a SQLite .db file", type=["db"])
