@@ -25,7 +25,7 @@ git clone https://github.com/kkchemboli/querytovis.git
 cd querytovis
 ```
 
-### 1. Install dependencies
+### 2. Install dependencies
 
 This project uses [uv](https://github.com/astral-sh/uv) as the package manager (a fast Python package installer and resolver).
 
@@ -33,13 +33,13 @@ This project uses [uv](https://github.com/astral-sh/uv) as the package manager (
 uv sync
 ```
 
-### 2. Start the Streamlit app
+### 3. Start the Streamlit app
 
 ```bash
 streamlit run frontend.py --server.maxUploadSize 1000
 ```
 
-### 3. Usage
+### 4. Usage
 
 1. **Upload your SQLite database** (`.db` file) via the web interface.
 2. **Enter a natural language query** (e.g., "Show a bar chart of the top 5 artists by album count").
