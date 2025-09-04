@@ -29,7 +29,7 @@ uv pip install -r requirements.txt
 ### 2. Start the Streamlit app
 
 ```bash
-streamlit run frontend.py
+streamlit run frontend.py --server.maxUploadSize 1000
 ```
 
 ### 3. Usage
