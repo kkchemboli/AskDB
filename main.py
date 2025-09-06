@@ -41,7 +41,9 @@ Rules:
 5. If the user asks for a chart, plot, or visualization:
    - Always generate Python code to create a pandas DataFrame from the SQL results.
    - Select an appropriate Plotly chart type.
-   - Convert it to HTML using fig.to_html().
+   - Always use the correct column names from the SQL results for the chart axes (x, y, etc.).
+   - Label the axes and chart title using the actual column names and query context.
+   - Convert the chart to HTML using fig.to_html().
    - Return ONLY the raw HTML string that starts with <!DOCTYPE html>. 
    - Do NOT wrap it in Markdown fences (```) or add explanations, text, or formatting. 
    - Never include Python code in the final output — only the HTML string.
