@@ -3,6 +3,8 @@ import os
 import tempfile
 import streamlit.components.v1 as components
 import asyncio
+from helper_functions import save_if_html
+from main import main as agent_main
 
 st.title("AskDB: Natural Language to SQL & Plotly Charts")
 
@@ -21,26 +23,17 @@ query = st.text_area("Enter your query (e.g., 'Plot a pie chart showing the dist
 
 # Step 3: Run Agent and Display Output
 if st.button("Submit Query") and db_path and query:
-    from test import save_if_html, main as agent_main
-
+    
     # Show spinner while generating plot
-    with st.spinner("Generating plot... Please wait."):
-        async def run_agent_with_custom_input():
-            await agent_main(db_path, query)
-            # Find the latest temp HTML file
-            temp_htmls = [os.path.join(tempfile.gettempdir(), f) for f in os.listdir(tempfile.gettempdir()) if f.endswith(".html")]
-            if temp_htmls:
-                latest_html = max(temp_htmls, key=os.path.getctime)
-                with open(latest_html, "r", encoding="utf-8") as f:
-                    html_content = f.read()
-                return html_content, latest_html
-            return None, None
+    with st.spinner("Generating response... Please wait."):
+        
+        answer =  asyncio.run(agent_main(db_path, query))
 
-        html_content, html_path = asyncio.run(run_agent_with_custom_input())
+        if answer["node"] == "Plot":
+            components.html(answer["result"], height=600, scrolling=True)
+        else:
+            st.write(answer["result"])
+    
+    
 
-    if html_content and (html_content.startswith("<!DOCTYPE html>") or html_content.startswith("<html")):
-        components.html(html_content, height=600, scrolling=True)
-    elif html_content:
-        st.write(html_content)
-    else:
-        st.warning("No chart or valid output generated.")
+    

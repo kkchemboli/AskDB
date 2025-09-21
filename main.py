@@ -76,7 +76,7 @@ async def main(db_path=None, user_query=None):
                 content = result["messages"][-1].content
             else:
                 content = "No response from Plot agent."
-            save_if_html(content, question)
+            #save_if_html(content, question)
             state["result"] = content
         except Exception as e:
             print(f"Error in Plot node: {e}")
