@@ -5,15 +5,14 @@ from langgraph.prebuilt import create_react_agent
 from langgraph.graph import END, StateGraph, START
 from langchain.prompts import ChatPromptTemplate
 from langchain_chroma import Chroma
-from helper_functions import save_if_html, collect_unique_values
+from helper_functions import collect_unique_values
 from tools import create_tools
 from sys_prompt import plot_prompt, router_prompt, answer_prompt
-import asyncio
 from typing_extensions import TypedDict
-from pydantic import BaseModel,Field
-from langchain_groq import ChatGroq
+from pydantic import BaseModel
 from dotenv import load_dotenv
-import os
+from langchain_sandbox import PyodideSandbox
+from langchain_core.messages import ToolMessage
 load_dotenv()
 
 class Plot(BaseModel):
@@ -41,6 +40,7 @@ async def main(db_path=None, user_query=None):
     db_uri = f"sqlite:///{db_path}" if db_path else "sqlite:///Chinook.db"
     db = SQLDatabase.from_uri(db_uri)
     llm = ChatOllama(model="qwen2.5",temperature=0)
+    #llm = ChatGroq(model="gemma2-9b-it",temperature=0)
     '''llm = ChatGroq(
     model="openai/gpt-oss-120b",
     temperature=0,
@@ -60,28 +60,60 @@ async def main(db_path=None, user_query=None):
 
     retriever = vector_store.as_retriever(search_kwargs={"k": 5})
     tools += tuple(create_tools(retriever))
-
-    # Agents
-    plot_agent = create_react_agent(model=llm, tools=tools, prompt=plot_prompt)
+    plot_tools = [tool for tool in tools if tool!="sandbox_tool"]
+    # Agent
     answer_agent = create_react_agent(model=llm, tools=tools, prompt=answer_prompt)
-
+    # Create a global sandbox instance
+    sandbox = PyodideSandbox(allow_net=True)
     # Define the Plot node
     async def Plot(state: GraphState) -> GraphState:
         print("Routing to Plot agent...")
         try:
             question = state["user_query"]
             state["node_name"] = "Plot"
-            result = await plot_agent.ainvoke({"messages": [{"role": "user", "content": question}]})
-            if result.get("messages") and result["messages"][-1].content:
-                content = result["messages"][-1].content
-            else:
-                content = "No response from Plot agent."
-            #save_if_html(content, question)
-            state["result"] = content
+            #plot_agent = create_react_agent(model=llm, tools=plot_tools, prompt=plot_prompt)
+            sql_result=None
+
+            for chunk in answer_agent.stream(
+        {"messages": [{"role": "user", "content": question}]},
+        stream_mode="values",  # ensures we get actual message content
+    ):
+                msg = chunk["messages"][-1]
+                content = msg.content
+                if content and isinstance(msg,ToolMessage) and  msg.name=="sql_db_query":
+                    sql_result = eval(content)
+
+                #print("Streaming chunk:", msg)
+            #print("SQL Result:", sql_result)
+            #chart_input = f"User Question: {question}\nDataFrame: {sql_result}"
+            #result = await plot_agent.ainvoke({"messages": [{"role": "user", "content": chart_input}]})
+            #print(result["messages"][-1])
+            #code = result["messages"][-1].content
+            async def plot_agent(question,sql_result):
+                chart_input = f"{plot_prompt}\n\nUser Question: {question}\nDataFrame: {sql_result}"
+                result = await llm.ainvoke(chart_input)
+                return result.content
+
+            code = await (plot_agent(question=question,sql_result=sql_result))
+            #print("Generated code:", code)
+            exec_result = await sandbox.execute(code)
+            #print(exec_result)
+            img_base64 = exec_result.result
+            state["result"] = img_base64
+            #print("the encoding is ",state["result"])
+            """# Execute code in sandbox
+            exec_result = await sandbox.execute(last_content)
+            print(exec_result)
+            # The sandbox result is the Base64 string
+            img_base64 = exec_result.result
+            state["result"] = img_base64"""
+
         except Exception as e:
             print(f"Error in Plot node: {e}")
-            state["result"] = "An error occurred in Plot."
+            state["result"] = None  # Fallback
+
         return state
+
 
     # Define the Answer node
     async def Answer(state: GraphState) -> GraphState:
@@ -94,19 +126,23 @@ async def main(db_path=None, user_query=None):
                 content = result["messages"][-1].content
             else:
                 content = "No response from Answer agent."
-            print(content)
+            #print(content)
             state["result"] = content
-            '''last_content=""
-            async for chunk in answer_agent.astream(
+            """sql_result=None
+            last_content=""
+            for chunk in answer_agent.stream(
         {"messages": [{"role": "user", "content": question}]},
         stream_mode="values",  # ensures we get actual message content
     ):
                 msg = chunk["messages"][-1]
                 content = msg.content
-                if content:
-                    last_content = content
-                    print("Streaming chunk:", content)
-            state["result"]=last_content'''
+                if content and isinstance(msg,ToolMessage) and  msg.name=="sql_db_query":
+                    sql_result = eval(msg.content)
+
+                last_content = content
+                print("Streaming chunk:", msg)
+            print(sql_result)
+            state["result"]=last_content"""
         except Exception as e:
             print(f"Error in Answer node: {e}")
             state["result"] = "An error occurred in Answer."
@@ -138,6 +174,19 @@ async def main(db_path=None, user_query=None):
 
         return tool_call if tool_call in ["Plot", "Answer"] else "Answer"
 
+    #Generating Base64 encoding
+    async def Generate_plot_from_code(state: GraphState)-> str:
+            """Generate Base64 String"""
+            state["node_name"]="Generate_plot_from_code"
+            code = state["result"]
+            try:
+                exec_result = sandbox.execute(code)
+                state["result"]=exec_result
+            except Exception as e:
+                print(f"Error in Answer node: {e}")
+                state["result"] = None
+            return state
+
     if not user_query:
         print("No query entered")
         return
@@ -147,7 +196,6 @@ async def main(db_path=None, user_query=None):
 
     workflow.add_node("Plot", Plot)
     workflow.add_node("Answer", Answer)
-
     workflow.add_conditional_edges(
         START,
         route,
@@ -165,8 +213,5 @@ async def main(db_path=None, user_query=None):
     result_state = await app.ainvoke({"user_query": user_query})
 # Return both the result and the node used
     return {"result": result_state["result"], "node": result_state.get("node_name", "")}
-  
 
 
-if __name__ == "__main__":
-    asyncio.run(main(user_query="How many albums does alis in chain have?"))

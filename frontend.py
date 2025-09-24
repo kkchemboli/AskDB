@@ -5,6 +5,7 @@ import streamlit.components.v1 as components
 import asyncio
 from helper_functions import save_if_html
 from main import main as agent_main
+import base64
 
 st.title("AskDB: Natural Language to SQL & Plotly Charts")
 
@@ -30,7 +31,8 @@ if st.button("Submit Query") and db_path and query:
         answer =  asyncio.run(agent_main(db_path, query))
 
         if answer["node"] == "Plot":
-            components.html(answer["result"], height=600, scrolling=True)
+            img_bytes = base64.b64decode(answer["result"])
+            st.image(img_bytes)
         else:
             st.write(answer["result"])
     
