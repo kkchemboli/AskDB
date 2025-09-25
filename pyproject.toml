@@ -13,6 +13,8 @@ dependencies = [
     "langchain-sandbox>=0.0.6",
     "langgraph>=0.6.6",
     "langgraph-prebuilt>=0.6.4",
+    "numpy>=2.3.2",
+    "pandas>=2.3.2",
     "pydantic-ai>=1.0.10",
     "streamlit>=1.49.1",
 ]
