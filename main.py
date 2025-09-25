@@ -1,6 +1,8 @@
 from langchain_community.utilities.sql_database import SQLDatabase
 from langchain_community.agent_toolkits import SQLDatabaseToolkit
-from langchain_ollama import ChatOllama,OllamaEmbeddings
+from langchain_ollama import OllamaEmbeddings
+from langchain_groq import ChatGroq
+#from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
 from langgraph.graph import END, StateGraph, START
 from langchain.prompts import ChatPromptTemplate
@@ -15,13 +17,6 @@ from langchain_sandbox import PyodideSandbox
 from langchain_core.messages import ToolMessage
 load_dotenv()
 
-class Plot(BaseModel):
-    """The Chart Plotting Agent.Use Plot when asked to make a chart or a graph."""
-
-class Answer(BaseModel):
-    """The Question Answering Agent. Use when only required to answer questions and not generate plots."""
-
-
 class GraphState(TypedDict):
     """
     Represents the state of the graph.
@@ -35,12 +30,19 @@ class GraphState(TypedDict):
     result: str
     node_name: str
 
+class Plot(BaseModel):
+    """The Chart Plotting Agent.Use Plot when asked to make a chart or a graph."""
+
+class Answer(BaseModel):
+    """The Question Answering Agent. Use when only required to answer questions and not generate plots."""
+
 async def main(db_path=None, user_query=None):
     # Initialize DB, LLM, and tools
     db_uri = f"sqlite:///{db_path}" if db_path else "sqlite:///Chinook.db"
     db = SQLDatabase.from_uri(db_uri)
-    llm = ChatOllama(model="qwen2.5",temperature=0)
-    #llm = ChatGroq(model="gemma2-9b-it",temperature=0)
+    #llm = ChatOllama(model="qwen2.5",temperature=0)
+    #llm = ChatOpenAI(model="nvidia/nemotron-nano-9b-v2:free",temperature=0,base_url="https://openrouter.ai/api/v1")
+    llm = ChatGroq(model="qwen/qwen3-32b",temperature=0,reasoning_format="hidden")
     '''llm = ChatGroq(
     model="openai/gpt-oss-120b",
     temperature=0,
@@ -80,6 +82,7 @@ async def main(db_path=None, user_query=None):
     ):
                 msg = chunk["messages"][-1]
                 content = msg.content
+                print("Received chunk:", msg)
                 if content and isinstance(msg,ToolMessage) and  msg.name=="sql_db_query":
                     sql_result = eval(content)
 
@@ -93,14 +96,14 @@ async def main(db_path=None, user_query=None):
                 chart_input = f"{plot_prompt}\n\nUser Question: {question}\nDataFrame: {sql_result}"
                 result = await llm.ainvoke(chart_input)
                 return result.content
-
+            print("SQL Result for plotting:", sql_result)
             code = await (plot_agent(question=question,sql_result=sql_result))
-            #print("Generated code:", code)
+            print("Generated code:", code)
             exec_result = await sandbox.execute(code)
-            #print(exec_result)
+            print(exec_result)
             img_base64 = exec_result.result
             state["result"] = img_base64
-            #print("the encoding is ",state["result"])
+            print("the encoding is ",state["result"])
             """# Execute code in sandbox
             exec_result = await sandbox.execute(last_content)
             print(exec_result)
@@ -126,7 +129,7 @@ async def main(db_path=None, user_query=None):
                 content = result["messages"][-1].content
             else:
                 content = "No response from Answer agent."
-            #print(content)
+            print(content)
             state["result"] = content
             """sql_result=None
             last_content=""
