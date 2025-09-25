@@ -75,6 +75,7 @@ Rules:
 5. Call `execute_sql` to get the answer from the database.
 6. Use the retriever tool for additional context or proper nouns before forming queries.
 7. Never respond with steps, explanations, or code—only give the final answer.
+8. Always call `execute_sql` after getting correct query from `check_sql`.
 """
 
 code_execution_prompt = """
