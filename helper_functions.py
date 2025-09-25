@@ -1,15 +1,4 @@
-import re, tempfile,os
-def save_if_html(text: str, query: str):
-    """Check if text is HTML and save to a temp file, else print."""
-    if text.startswith("<!DOCTYPE html>") or text.startswith("<html"):
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".html", mode="w", encoding="utf-8") as tmp:
-            tmp.write(text)
-            print(f"✅ Plotly chart saved to temporary file: {tmp.name}")
-        return tmp.name
-    else:
-        print(text)
-        return None
-        
+import re
 
 def get_text_columns(db, table):
     """Return all text-like columns in a table."""
