@@ -1,8 +1,7 @@
 from langchain_community.utilities.sql_database import SQLDatabase
 from langchain_community.agent_toolkits import SQLDatabaseToolkit
-from langchain_ollama import OllamaEmbeddings
+from langchain_cohere import CohereEmbeddings
 from langchain_groq import ChatGroq
-#from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
 from langgraph.graph import END, StateGraph, START
 from langchain.prompts import ChatPromptTemplate
@@ -40,8 +39,6 @@ async def main(db_path=None, user_query=None):
     # Initialize DB, LLM, and tools
     db_uri = f"sqlite:///{db_path}" if db_path else "sqlite:///Chinook.db"
     db = SQLDatabase.from_uri(db_uri)
-    #llm = ChatOllama(model="qwen2.5",temperature=0)
-    #llm = ChatOpenAI(model="nvidia/nemotron-nano-9b-v2:free",temperature=0,base_url="https://openrouter.ai/api/v1")
     llm = ChatGroq(model="qwen/qwen3-32b",temperature=0,reasoning_format="hidden")
     '''llm = ChatGroq(
     model="openai/gpt-oss-120b",
@@ -50,15 +47,17 @@ async def main(db_path=None, user_query=None):
 )'''
     tools = SQLDatabaseToolkit(db=db, llm=llm).get_tools()
 
-    embeddings = OllamaEmbeddings(model="nomic-embed-text")
+    embeddings = CohereEmbeddings(model="embed-english-light-v3.0")
     vector_store = Chroma(
         collection_name="example_collection",
         embedding_function=embeddings,
         persist_directory="./chroma_langchain_db",
     )
-    if len(vector_store.get()["documents"]) == 0:
-        unique_values = collect_unique_values(db, strip_numbers=True)
-        vector_store.add_texts(unique_values)
+    if len(vector_store.get()["documents"]) != 0:
+        vector_store.reset_collection()
+
+    unique_values = collect_unique_values(db, strip_numbers=True)
+    vector_store.add_texts(unique_values)
 
     retriever = vector_store.as_retriever(search_kwargs={"k": 5})
     tools += tuple(create_tools(retriever))
@@ -69,50 +68,29 @@ async def main(db_path=None, user_query=None):
     sandbox = PyodideSandbox(allow_net=True)
     # Define the Plot node
     async def Plot(state: GraphState) -> GraphState:
-        print("Routing to Plot agent...")
         try:
             question = state["user_query"]
             state["node_name"] = "Plot"
-            #plot_agent = create_react_agent(model=llm, tools=plot_tools, prompt=plot_prompt)
             sql_result=None
 
             for chunk in answer_agent.stream(
         {"messages": [{"role": "user", "content": question}]},
-        stream_mode="values",  # ensures we get actual message content
+        stream_mode="values", 
     ):
                 msg = chunk["messages"][-1]
                 content = msg.content
-                print("Received chunk:", msg)
                 if content and isinstance(msg,ToolMessage) and  msg.name=="sql_db_query":
                     sql_result = eval(content)
 
-                #print("Streaming chunk:", msg)
-            #print("SQL Result:", sql_result)
-            #chart_input = f"User Question: {question}\nDataFrame: {sql_result}"
-            #result = await plot_agent.ainvoke({"messages": [{"role": "user", "content": chart_input}]})
-            #print(result["messages"][-1])
-            #code = result["messages"][-1].content
             async def plot_agent(question,sql_result):
                 chart_input = f"{plot_prompt}\n\nUser Question: {question}\nDataFrame: {sql_result}"
                 result = await llm.ainvoke(chart_input)
                 return result.content
-            print("SQL Result for plotting:", sql_result)
             code = await (plot_agent(question=question,sql_result=sql_result))
-            print("Generated code:", code)
             exec_result = await sandbox.execute(code)
-            print(exec_result)
-            img_base64 = exec_result.result
-            state["result"] = img_base64
-            print("the encoding is ",state["result"])
-            """# Execute code in sandbox
-            exec_result = await sandbox.execute(last_content)
-            print(exec_result)
-            # The sandbox result is the Base64 string
-            img_base64 = exec_result.result
-            state["result"] = img_base64"""
+            state["result"] = exec_result.result
 
-        except Exception as e:
-            print(f"Error in Plot node: {e}")
+        except Exception:
             state["result"] = None  # Fallback
 
         return state
@@ -120,7 +98,6 @@ async def main(db_path=None, user_query=None):
 
     # Define the Answer node
     async def Answer(state: GraphState) -> GraphState:
-        print("Routing to Answer agent...")
         try:
             question = state["user_query"]
             state["node_name"] = "Answer"
@@ -129,25 +106,8 @@ async def main(db_path=None, user_query=None):
                 content = result["messages"][-1].content
             else:
                 content = "No response from Answer agent."
-            print(content)
             state["result"] = content
-            """sql_result=None
-            last_content=""
-            for chunk in answer_agent.stream(
-        {"messages": [{"role": "user", "content": question}]},
-        stream_mode="values",  # ensures we get actual message content
-    ):
-                msg = chunk["messages"][-1]
-                content = msg.content
-                if content and isinstance(msg,ToolMessage) and  msg.name=="sql_db_query":
-                    sql_result = eval(msg.content)
-
-                last_content = content
-                print("Streaming chunk:", msg)
-            print(sql_result)
-            state["result"]=last_content"""
-        except Exception as e:
-            print(f"Error in Answer node: {e}")
+        except Exception:
             state["result"] = "An error occurred in Answer."
         return state
 
@@ -169,29 +129,13 @@ async def main(db_path=None, user_query=None):
         result = await question_router.ainvoke({"user_query": question})
         try:
             tool_call = result.tool_calls[0]["name"]
-            print(f"Router chose: {tool_call}")
-        except Exception as e:
-            print("-- Router failed, defaulting to Answer --")
-            print(e)
+        except Exception:
             tool_call = "Answer"
 
         return tool_call if tool_call in ["Plot", "Answer"] else "Answer"
 
-    #Generating Base64 encoding
-    async def Generate_plot_from_code(state: GraphState)-> str:
-            """Generate Base64 String"""
-            state["node_name"]="Generate_plot_from_code"
-            code = state["result"]
-            try:
-                exec_result = sandbox.execute(code)
-                state["result"]=exec_result
-            except Exception as e:
-                print(f"Error in Answer node: {e}")
-                state["result"] = None
-            return state
 
     if not user_query:
-        print("No query entered")
         return
 
     # Define the state graph

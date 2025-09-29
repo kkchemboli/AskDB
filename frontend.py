@@ -45,8 +45,10 @@ if st.button("Submit Query") and db_path and query:
         if answer["node"] == "Plot":
             img_bytes = base64.b64decode(answer["result"])
             st.image(img_bytes)
-        else:
+        elif answer["node"] == "Answer":
             st.write(answer["result"])
+        else :
+            st.write("No valid response generated.")
 
 
 
