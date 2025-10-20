@@ -11,10 +11,9 @@ from tools import create_tools
 from sys_prompt import plot_prompt, router_prompt, answer_prompt
 from typing_extensions import TypedDict
 from pydantic import BaseModel
-from dotenv import load_dotenv
 from langchain_sandbox import PyodideSandbox
 from langchain_core.messages import ToolMessage
-load_dotenv()
+import streamlit as st
 
 class GraphState(TypedDict):
     """
@@ -39,15 +38,24 @@ async def main(db_path=None, user_query=None):
     # Initialize DB, LLM, and tools
     db_uri = f"sqlite:///{db_path}" if db_path else "sqlite:///Chinook.db"
     db = SQLDatabase.from_uri(db_uri)
-    llm = ChatGroq(model="qwen/qwen3-32b",temperature=0,reasoning_format="hidden")
-    '''llm = ChatGroq(
-    model="openai/gpt-oss-120b",
+    groq_secrets = st.secrets["groq"]
+    api_key = groq_secrets["api_key"]
+    cohere_secrets = st.secrets["cohere"]
+    cohere_api_key = cohere_secrets["api_key"]
+    
+    llm = ChatGroq(
+    model="qwen/qwen3-32b",
     temperature=0,
-    include_reasoning=False,
-)'''
+    reasoning_format="hidden",
+    api_key=api_key
+)
     tools = SQLDatabaseToolkit(db=db, llm=llm).get_tools()
+    embeddings = CohereEmbeddings(
+    model="embed-english-light-v3.0",
+    cohere_api_key=cohere_api_key
+)
 
-    embeddings = CohereEmbeddings(model="embed-english-light-v3.0")
+
     vector_store = Chroma(
         collection_name="example_collection",
         embedding_function=embeddings,
