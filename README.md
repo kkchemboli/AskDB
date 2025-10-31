@@ -1,6 +1,7 @@
 # AskDB
 
 AskDB is a Streamlit-powered application that lets you interact with your SQLite databases or CSV files using natural language queries. It leverages AI Agents to generate SQL, run queries, and visualize results as interactive charts—all from a simple web interface.
+Check it out at https://kkchemboli-askdb.streamlit.app/
 
 ---
 
