@@ -5,6 +5,7 @@ description = "AskDB is a Streamlit-powered application that lets you interact w
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "dotenv>=0.9.9",
     "langchain>=0.3.27",
     "langchain-chroma>=0.2.5",
     "langchain-cohere>=0.4.6",

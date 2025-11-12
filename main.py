@@ -13,7 +13,9 @@ from typing_extensions import TypedDict
 from pydantic import BaseModel
 from langchain_sandbox import PyodideSandbox
 from langchain_core.messages import ToolMessage
-import streamlit as st
+from dotenv import load_dotenv
+import os
+load_dotenv()
 
 class GraphState(TypedDict):
     """
@@ -38,10 +40,8 @@ async def main(db_path=None, user_query=None):
     # Initialize DB, LLM, and tools
     db_uri = f"sqlite:///{db_path}" if db_path else "sqlite:///Chinook.db"
     db = SQLDatabase.from_uri(db_uri)
-    groq_secrets = st.secrets["groq"]
-    api_key = groq_secrets["api_key"]
-    cohere_secrets = st.secrets["cohere"]
-    cohere_api_key = cohere_secrets["api_key"]
+    api_key = os.environ.get("GROQ_API_KEY")
+    cohere_api_key = os.environ.get("COHERE_API_KEY")
     
     llm = ChatGroq(
     model="qwen/qwen3-32b",
